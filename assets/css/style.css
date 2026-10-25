@@ -1,0 +1,377 @@
+/* =========================================================
+   HodoMunla — Sistema de diseño base
+   Proyecto: yoquiero.uno
+   ========================================================= */
+
+:root {
+  --hm-bg: #FFFFFF;
+  --hm-bg-alt: #F8F9FA;
+  --hm-text: #212529;
+  --hm-text-muted: #5C636A;
+  --hm-accent: #0B5FFF;
+  --hm-accent-hover: #0846C4;
+  --hm-border: #E9ECEF;
+  --hm-dark: #212529;
+  --hm-radius: 10px;
+  --hm-font: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 88px;
+}
+
+body {
+  margin: 0;
+  font-family: var(--hm-font);
+  color: var(--hm-text);
+  background-color: var(--hm-bg);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+img,
+svg {
+  max-width: 100%;
+  height: auto;
+}
+
+/* ---------- Accesibilidad ---------- */
+.hm-skip-link {
+  position: absolute;
+  top: -100px;
+  left: 1rem;
+  z-index: 2000;
+  padding: .75rem 1rem;
+  background: var(--hm-text);
+  color: #fff;
+  border-radius: var(--hm-radius);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.hm-skip-link:focus {
+  top: 1rem;
+}
+
+.hm-noscript {
+  margin: 0;
+  padding: .75rem 1rem;
+  background: #FFF3CD;
+  color: #664D03;
+  text-align: center;
+  font-size: .9rem;
+}
+
+/* ---------- Header ---------- */
+.hm-header {
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  background: rgba(255, 255, 255, .96);
+  border-bottom: 1px solid var(--hm-border);
+  backdrop-filter: blur(8px);
+}
+
+.hm-logo {
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: -.02em;
+  color: var(--hm-text);
+  text-decoration: none;
+}
+
+.hm-logo span {
+  color: var(--hm-accent);
+}
+
+.hm-nav-link {
+  color: var(--hm-text-muted);
+  text-decoration: none;
+  font-size: .95rem;
+  font-weight: 500;
+  transition: color .2s ease;
+}
+
+.hm-nav-link:hover,
+.hm-nav-link:focus-visible {
+  color: var(--hm-text);
+}
+
+/* ---------- Botones ---------- */
+.hm-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: .85rem 1.5rem;
+  border: 1px solid transparent;
+  border-radius: var(--hm-radius);
+  font-family: var(--hm-font);
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.2;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color .2s ease, color .2s ease, border-color .2s ease;
+}
+
+.hm-btn-primary {
+  background-color: var(--hm-accent);
+  color: #fff;
+}
+
+.hm-btn-primary:hover,
+.hm-btn-primary:focus-visible {
+  background-color: var(--hm-accent-hover);
+  color: #fff;
+}
+
+.hm-btn-secondary {
+  background-color: transparent;
+  color: var(--hm-text);
+  border-color: var(--hm-border);
+}
+
+.hm-btn-secondary:hover,
+.hm-btn-secondary:focus-visible {
+  border-color: var(--hm-text);
+  color: var(--hm-text);
+}
+
+.hm-btn-sm {
+  padding: .55rem 1rem;
+  font-size: .9rem;
+}
+
+.hm-btn-lg {
+  padding: 1rem 2rem;
+  font-size: 1.05rem;
+}
+
+.hm-btn:focus-visible,
+.hm-nav-link:focus-visible,
+.hm-logo:focus-visible {
+  outline: 3px solid rgba(11, 95, 255, .35);
+  outline-offset: 3px;
+}
+
+/* ---------- Hero ---------- */
+.hm-hero {
+  padding: 5.5rem 0 4.5rem;
+}
+
+.hm-eyebrow {
+  margin-bottom: 1rem;
+  color: var(--hm-accent);
+  font-size: .8rem;
+  font-weight: 700;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.hm-hero-title {
+  margin: 0 0 1.25rem;
+  font-size: clamp(2.1rem, 5vw, 3.4rem);
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -.03em;
+}
+
+.hm-hero-text {
+  max-width: 56ch;
+  margin-bottom: 2rem;
+  color: var(--hm-text-muted);
+  font-size: 1.1rem;
+}
+
+.hm-video-frame {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 16 / 9;
+  width: 100%;
+  background-color: var(--hm-bg-alt);
+  border: 1px solid var(--hm-border);
+  border-radius: var(--hm-radius);
+}
+
+.hm-video-placeholder {
+  color: var(--hm-text-muted);
+  font-size: .9rem;
+  font-weight: 500;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+/* ---------- Secciones ---------- */
+.hm-section {
+  padding: 4.5rem 0;
+}
+
+.hm-section-alt {
+  background-color: var(--hm-bg-alt);
+}
+
+.hm-section-title {
+  margin: 0 0 1rem;
+  font-size: clamp(1.75rem, 3.5vw, 2.4rem);
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -.02em;
+}
+
+.hm-section-text {
+  max-width: 65ch;
+  margin: 0;
+  color: var(--hm-text-muted);
+  font-size: 1.05rem;
+}
+
+/* ---------- Tarjetas ---------- */
+.hm-card {
+  height: 100%;
+  padding: 1.5rem;
+  background-color: #fff;
+  border: 1px solid var(--hm-border);
+  border-radius: var(--hm-radius);
+}
+
+.hm-card-title {
+  margin: 0 0 .5rem;
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: -.01em;
+}
+
+.hm-card-text {
+  margin: 0;
+  color: var(--hm-text-muted);
+  font-size: .98rem;
+}
+
+.hm-card-module {
+  border-left: 3px solid var(--hm-accent);
+}
+
+.hm-module-index {
+  margin: 0 0 .5rem;
+  color: var(--hm-accent);
+  font-size: .78rem;
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+/* ---------- CTA final ---------- */
+.hm-cta {
+  background-color: var(--hm-dark);
+  color: #fff;
+}
+
+.hm-cta .hm-section-title {
+  color: #fff;
+}
+
+.hm-cta .hm-section-text {
+  color: rgba(255, 255, 255, .72);
+  margin-left: auto;
+  margin-right: auto;
+  margin-bottom: 2rem;
+}
+
+/* ---------- Footer ---------- */
+.hm-footer {
+  background-color: var(--hm-bg-alt);
+  border-top: 1px solid var(--hm-border);
+}
+
+.hm-logo-footer {
+  font-size: 1.05rem;
+}
+
+.hm-footer-text {
+  max-width: 44ch;
+  color: var(--hm-text-muted);
+  font-size: .95rem;
+}
+
+.hm-footer-nav a {
+  color: var(--hm-text-muted);
+  text-decoration: none;
+  font-size: .95rem;
+  font-weight: 500;
+}
+
+.hm-footer-nav a:hover,
+.hm-footer-nav a:focus-visible {
+  color: var(--hm-text);
+}
+
+.hm-footer-bottom {
+  border-top: 1px solid var(--hm-border);
+  color: var(--hm-text-muted);
+  font-size: .85rem;
+}
+
+/* ---------- Responsive ---------- */
+@media (max-width: 767.98px) {
+  .hm-hero {
+    padding: 3.5rem 0 3rem;
+  }
+
+  .hm-section {
+    padding: 3.25rem 0;
+  }
+
+  .hm-header .hm-nav {
+    order: 3;
+    width: 100%;
+    gap: 1.25rem !important;
+  }
+}
+
+/* =========================================================
+   Hero VSL (Fase 4)
+   ========================================================= */
+
+/* Contenedor del video: 16:9 garantizado en cualquier viewport */
+.hm-vsl-frame {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background-color: var(--hm-dark);
+  border-radius: var(--hm-radius);
+  overflow: hidden;
+}
+
+/* El video o iframe real ocupa el 100% del contenedor */
+.hm-vsl-frame > video,
+.hm-vsl-frame > iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  object-fit: cover;
+}
+
+/* Placeholder mientras no hay VSL definitivo */
+.hm-vsl-placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, .5);
+  font-family: var(--hm-font);
+  font-size: .85rem;
+  font-weight: 600;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}

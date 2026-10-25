@@ -1,0 +1,960 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0b0914">
+<title>Candy Runner · HodoMunla</title>
+<style>
+  /* ======================================================================
+     Candy Runner — estilos de aislamiento
+     Mobile-First · sin scroll · sin zoom · sin selección
+     ====================================================================== */
+  :root {
+    --bg-space:      #0b0914;
+    --candy-pink:    #ff007f;
+    --candy-cyan:    #00f0ff;
+    --candy-yellow:  #ffde00;
+    --ease-elastic:  cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: var(--bg-space);
+    color: #fff;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    touch-action: none;
+    overscroll-behavior: none;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  #stage {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  #game {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    background: var(--bg-space);
+    touch-action: none;
+  }
+
+  /* Hint solo visible en dispositivos con puntero fino (escritorio) */
+  .hint {
+    display: none;
+    position: fixed;
+    left: 50%;
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    transform: translateX(-50%);
+    z-index: 4;
+    color: rgba(255, 255, 255, 0.45);
+    font-size: 0.72rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    pointer-events: none;
+    white-space: nowrap;
+  }
+
+  @media (pointer: fine), (hover: hover) {
+    .hint { display: block; }
+  }
+
+  /* ---------- Overlay Game Over ---------- */
+  #overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    padding: 24px;
+    text-align: center;
+    background: rgba(11, 9, 20, 0.72);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+    animation: fade-in 0.25s ease both;
+  }
+
+  #overlay[hidden] { display: none; }
+
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+
+  #overlay h2 {
+    font-size: clamp(2rem, 9vw, 3rem);
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    color: var(--candy-pink);
+    text-shadow:
+      0 0 18px rgba(255, 0, 127, 0.85),
+      0 0 42px rgba(255, 0, 127, 0.45);
+  }
+
+  #overlay p {
+    font-size: 1.05rem;
+    color: rgba(255, 255, 255, 0.78);
+  }
+
+  #overlay p span {
+    color: var(--candy-cyan);
+    font-weight: 800;
+    text-shadow: 0 0 12px rgba(0, 240, 255, 0.7);
+  }
+
+  #btn-restart {
+    margin-top: 8px;
+    min-height: 54px;
+    padding: 0 36px;
+    border-radius: 999px;
+    font-size: 1rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    color: #0b0914;
+    background-image: linear-gradient(135deg, #ff007f 0%, #00f0ff 100%);
+    box-shadow:
+      0 6px 22px rgba(255, 0, 127, 0.35),
+      inset 0 1px 0 rgba(255, 255, 255, 0.25);
+    touch-action: manipulation;
+    will-change: transform;
+    transition: transform 0.15s var(--ease-elastic);
+    border: none;
+    cursor: pointer;
+  }
+
+  #btn-restart:active { transform: scale(0.94); }
+
+  #btn-restart:focus-visible {
+    outline: 2px solid var(--candy-yellow);
+    outline-offset: 3px;
+  }
+</style>
+</head>
+<body>
+
+  <div id="stage">
+    <canvas id="game" width="800" height="400"></canvas>
+  </div>
+
+  <div class="hint">Espacio / ↑ saltar · doble salto en el aire</div>
+
+  <div id="overlay" hidden>
+    <h2>GAME OVER</h2>
+    <p>Puntuación: <span id="final-score">0</span></p>
+    <button id="btn-restart" type="button">REINICIAR</button>
+  </div>
+
+<script>
+(() => {
+  'use strict';
+
+  /* ==================================================================
+     1. CONSTANTES
+     ================================================================== */
+  const W = 800;
+  const H = 400;
+
+  const BG     = '#0b0914';
+  const CYAN   = '#00f0ff';
+  const PINK   = '#ff007f';
+  const YELLOW = '#ffde00';
+
+  // Suelo y jugador
+  const GROUND_Y        = 320;   // Y del borde superior de las plataformas
+  const PLAYER_W        = 34;
+  const PLAYER_H        = 40;
+  const PLAYER_SCREEN_X = 150;   // X fija en pantalla
+
+  // Física
+  const GRAVITY              = 2400;   // px/s²
+  const JUMP_VELOCITY        = -820;   // salto desde suelo
+  const DOUBLE_JUMP_VELOCITY = -720;   // segundo salto (10% más débil)
+  const COYOTE_TIME          = 0.10;   // s de gracia al abandonar una plataforma
+
+  // Velocidad progresiva
+  const SPEED_START = 300;
+  const SPEED_MAX   = 620;
+  const SPEED_RAMP  = 12;    // px/s que se suma cada segundo
+
+  // Generación de mundo
+  const GAP_MIN     = 110;
+  const GAP_MAX     = 190;
+  const PLAT_MIN_W  = 240;
+  const PLAT_MAX_W  = 460;
+  const PLAT_FIRST_W = 800;  // primera plataforma: pista de aterrizaje amplia
+  const SPIKE_W = 34;
+  const SPIKE_H = 32;
+
+  /* ==================================================================
+     2. CANVAS Y DOM
+     ================================================================== */
+  const canvas = document.getElementById('game');
+  const ctx    = canvas.getContext('2d', { alpha: false });
+  canvas.width  = W;
+  canvas.height = H;
+
+  const overlay    = document.getElementById('overlay');
+  const finalScore = document.getElementById('final-score');
+  const btnRestart = document.getElementById('btn-restart');
+
+  /* ==================================================================
+     3. ESTADO DE ENTRADA UNIFICADO (patrón del portal)
+     ================================================================== */
+  const input = { jump: false };
+  let jumpHeld = false;   // edge detection: true si la tecla ya fue procesada
+
+  /* ==================================================================
+     4. ESTADO DEL JUEGO
+     ================================================================== */
+  let cameraX  = 0;     // X de la cámara en coordenadas de mundo
+  let speed    = SPEED_START;
+  let score    = 0;
+  let elapsed  = 0;
+  let gameOver = true;
+
+  // Jugador (py = top en coordenadas Y de pantalla, sin cámara vertical)
+  let px, py, pvy;
+  let onGround       = true;
+  let usedDoubleJump = false;
+  let coyoteTimer    = 0;
+  let scaleX = 1, scaleY = 1;
+  let targetScaleX = 1, targetScaleY = 1;
+  let playerTrail = [];
+
+  // Mundo
+  let platforms      = [];   // { x, w }
+  let spikes         = [];   // { worldX, w, h }
+  let collectibles   = [];   // { worldX, y, collected }
+  let platformEndX   = 0;
+
+  // Efectos
+  let particles = [];
+
+  // Fondo
+  let bgCanvas, starLayers;
+
+  /* ==================================================================
+     5. UTILIDADES
+     ================================================================== */
+  const rand  = (a, b) => a + Math.random() * (b - a);
+  const mod   = (n, m) => ((n % m) + m) % m;
+  const lerp  = (a, b, t) => a + (b - a) * t;
+
+  /* ==================================================================
+     6. FONDO — nebulosas + estrellas con paralaje
+     ================================================================== */
+  function buildBackground() {
+    bgCanvas = document.createElement('canvas');
+    bgCanvas.width  = W;
+    bgCanvas.height = H;
+    const g = bgCanvas.getContext('2d');
+
+    g.fillStyle = BG;
+    g.fillRect(0, 0, W, H);
+
+    const nebulas = [
+      [W * 0.15, H * 0.30, 'rgba(255, 0, 127, 0.12)', 300],
+      [W * 0.75, H * 0.60, 'rgba(0, 240, 255, 0.10)', 350],
+      [W * 0.50, H * 0.90, 'rgba(255, 222, 0, 0.07)', 280]
+    ];
+    for (const [nx, ny, col, radius] of nebulas) {
+      const rg = g.createRadialGradient(nx, ny, 0, nx, ny, radius);
+      rg.addColorStop(0, col);
+      rg.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      g.fillStyle = rg;
+      g.fillRect(0, 0, W, H);
+    }
+  }
+
+  function buildStarLayer(count, sizeMin, sizeMax, alphaMin, alphaMax) {
+    const c = document.createElement('canvas');
+    c.width  = W;
+    c.height = H;
+    const g = c.getContext('2d');
+
+    for (let i = 0; i < count; i++) {
+      const x = Math.random() * W;
+      const y = Math.random() * H;
+      const r = rand(sizeMin, sizeMax);
+      const a = rand(alphaMin, alphaMax);
+      const roll = Math.random();
+      g.globalAlpha = a;
+      g.fillStyle = roll < 0.15 ? CYAN : roll < 0.30 ? PINK : '#ffffff';
+      g.beginPath();
+      g.arc(x, y, r, 0, Math.PI * 2);
+      g.fill();
+    }
+    return c;
+  }
+
+  function initBackgrounds() {
+    buildBackground();
+    starLayers = [
+      { canvas: buildStarLayer(30, 0.6, 1.0, 0.2, 0.5), speed: 0.10 },
+      { canvas: buildStarLayer(25, 0.8, 1.4, 0.3, 0.7), speed: 0.25 },
+      { canvas: buildStarLayer(20, 1.0, 1.8, 0.4, 0.9), speed: 0.50 }
+    ];
+  }
+
+  /* ==================================================================
+     7. JUGADOR — física y saltos
+     ================================================================== */
+  function resetPlayer() {
+    px  = PLAYER_SCREEN_X;
+    py  = GROUND_Y - PLAYER_H;
+    pvy = 0;
+    onGround       = true;
+    usedDoubleJump = false;
+    coyoteTimer    = 0;
+    scaleX = 1; scaleY = 1;
+    targetScaleX = 1; targetScaleY = 1;
+    playerTrail = [];
+  }
+
+  function tryJump() {
+    if (gameOver) return;
+
+    // Salto de suelo (con coyote time)
+    if (onGround || coyoteTimer > 0) {
+      pvy = JUMP_VELOCITY;
+      onGround       = false;
+      coyoteTimer    = 0;
+      usedDoubleJump = false;   // el doble salto queda disponible
+      targetScaleX = 0.80;
+      targetScaleY = 1.25;
+      spawnJumpBurst();
+      return;
+    }
+
+    // Doble salto en el aire
+    if (!usedDoubleJump) {
+      pvy = DOUBLE_JUMP_VELOCITY;
+      usedDoubleJump = true;
+      targetScaleX = 0.75;
+      targetScaleY = 1.30;
+      spawnDoubleJumpBurst();
+    }
+  }
+
+  /* ==================================================================
+     8. PARTÍCULAS
+     ================================================================== */
+  function spawnJumpBurst() {
+    for (let i = 0; i < 6; i++) {
+      particles.push({
+        x: px + PLAYER_W / 2,
+        y: py + PLAYER_H,
+        vx: rand(-120, 120) - speed * 0.20,
+        vy: rand(-50, 50),
+        life: 0.35,
+        maxLife: 0.35,
+        color: CYAN,
+        size: 3
+      });
+    }
+  }
+
+  function spawnDoubleJumpBurst() {
+    for (let i = 0; i < 12; i++) {
+      const ang = (i / 12) * Math.PI * 2;
+      const spd = rand(100, 210);
+      particles.push({
+        x: px + PLAYER_W / 2,
+        y: py + PLAYER_H / 2,
+        vx: Math.cos(ang) * spd,
+        vy: Math.sin(ang) * spd,
+        life: 0.45,
+        maxLife: 0.45,
+        color: YELLOW,
+        size: 3
+      });
+    }
+  }
+
+  function spawnCollectBurst(x, y) {
+    for (let i = 0; i < 10; i++) {
+      const ang = Math.random() * Math.PI * 2;
+      const spd = rand(80, 200);
+      particles.push({
+        x, y,
+        vx: Math.cos(ang) * spd,
+        vy: Math.sin(ang) * spd,
+        life: rand(0.4, 0.7),
+        maxLife: 0.7,
+        color: YELLOW,
+        size: 3
+      });
+    }
+  }
+
+  /* ==================================================================
+     9. GENERACIÓN PROCEDURAL DE MUNDO
+     ================================================================== */
+  function spawnPlatform() {
+    const isFirst = platforms.length === 0;
+
+    const gap     = isFirst ? 0 : rand(GAP_MIN, GAP_MAX);
+    const startX  = platformEndX + gap;
+    const pw      = isFirst ? PLAT_FIRST_W : rand(PLAT_MIN_W, PLAT_MAX_W);
+
+    platforms.push({ x: startX, w: pw });
+
+    // ---- Pinchos (a partir de la 3ª plataforma) ----
+    if (platforms.length >= 3 && Math.random() < 0.75) {
+      const count    = (Math.random() < 0.35 && pw > 320) ? 2 : 1;
+      const margin   = 70;
+      const usable   = pw - margin * 2 - SPIKE_W;
+      if (usable > 0) {
+        const placed = [];
+        for (let i = 0; i < count; i++) {
+          const sx = startX + margin + Math.random() * usable;
+          if (placed.some(p => Math.abs(p - sx) < 90)) continue;
+          placed.push(sx);
+          spikes.push({ worldX: sx, w: SPIKE_W, h: SPIKE_H });
+        }
+      }
+    }
+
+    // ---- Caramelos sobre la plataforma (arco) ----
+    if (Math.random() < 0.65) {
+      const cx = startX + pw * 0.5;
+      const cy = GROUND_Y - rand(95, 165);
+      const n  = Math.random() < 0.40 ? 3 : 1;
+      for (let i = 0; i < n; i++) {
+        const offset = (i - (n - 1) / 2) * 36;
+        collectibles.push({
+          worldX: cx + offset,
+          y: cy - Math.abs(offset) * 0.4,
+          collected: false
+        });
+      }
+    }
+
+    // ---- Caramelo sobre el hueco (riesgo/recompensa) ----
+    if (!isFirst && gap > 135 && Math.random() < 0.40) {
+      collectibles.push({
+        worldX: platformEndX + gap * 0.5,
+        y: GROUND_Y - rand(105, 155),
+        collected: false
+      });
+    }
+
+    platformEndX = startX + pw;
+  }
+
+  /* ==================================================================
+     10. RESET
+     ================================================================== */
+  function reset() {
+    overlay.hidden = true;
+
+    cameraX  = 0;
+    speed    = SPEED_START;
+    score    = 0;
+    elapsed  = 0;
+    gameOver = false;
+
+    platforms    = [];
+    spikes       = [];
+    collectibles = [];
+    particles    = [];
+    platformEndX = 0;
+
+    resetPlayer();
+
+    // Primera plataforma + relleno del horizonte
+    spawnPlatform();
+    while (platformEndX < W + 600) spawnPlatform();
+
+    input.jump = false;
+    jumpHeld   = false;
+  }
+
+  /* ==================================================================
+     11. COLISIONES
+     ================================================================== */
+  function playerRect() {
+    return { x: px, y: py, w: PLAYER_W, h: PLAYER_H };
+  }
+
+  function rectsOverlap(a, b) {
+    return a.x < b.x + b.w && a.x + a.w > b.x &&
+           a.y < b.y + b.h && a.y + a.h > b.y;
+  }
+
+  /* ==================================================================
+     12. UPDATE — simulación de un frame
+     ================================================================== */
+  function update(dt) {
+    // En game over seguimos animando partículas, pero nada más
+    if (gameOver) {
+      updateParticles(dt);
+      return;
+    }
+
+    elapsed += dt;
+    speed = Math.min(SPEED_MAX, SPEED_START + elapsed * SPEED_RAMP);
+
+    const dx = speed * dt;
+    cameraX += dx;
+    score   += dx * 0.1;
+
+    /* ---- Edge detection del salto ---- */
+    if (input.jump && !jumpHeld) tryJump();
+    jumpHeld = input.jump;
+
+    /* ---- Coyote time ---- */
+    if (onGround) coyoteTimer = COYOTE_TIME;
+    else          coyoteTimer = Math.max(0, coyoteTimer - dt);
+
+    /* ---- Integración vertical ---- */
+    const prevBottom = py + PLAYER_H;
+    pvy += GRAVITY * dt;
+    py  += pvy * dt;
+
+    /* ---- Colisión con plataformas (solo al descender) ---- */
+    const playerWorldX = cameraX + px;
+    let landed = false;
+
+    if (pvy >= 0) {
+      for (const p of platforms) {
+        if (playerWorldX + PLAYER_W > p.x && playerWorldX < p.x + p.w) {
+          if (prevBottom <= GROUND_Y && py + PLAYER_H >= GROUND_Y) {
+            py  = GROUND_Y - PLAYER_H;
+            pvy = 0;
+            onGround       = true;
+            usedDoubleJump = false;
+            targetScaleX = 1.15;
+            targetScaleY = 0.85;
+            landed = true;
+            break;
+          }
+        }
+      }
+    }
+    if (!landed) onGround = false;
+
+    /* ---- Suavizado del squash/stretch ---- */
+    const k = 1 - Math.pow(0.001, dt);
+    scaleX = lerp(scaleX, targetScaleX, k);
+    scaleY = lerp(scaleY, targetScaleY, k);
+    targetScaleX = 1;
+    targetScaleY = 1;
+
+    /* ---- Caída al vacío ---- */
+    if (py > H + 40) {
+      gameOverSequence();
+      return;
+    }
+
+    /* ---- Colisión con pinchos ---- */
+    const pr = playerRect();
+    for (const sp of spikes) {
+      const sx = sp.worldX - cameraX;
+      if (sx + sp.w < 0 || sx > W) continue;
+      const sr = { x: sx, y: GROUND_Y - sp.h, w: sp.w, h: sp.h };
+      if (rectsOverlap(pr, sr)) {
+        gameOverSequence();
+        return;
+      }
+    }
+
+    /* ---- Recolección de caramelos ---- */
+    const pcx = px + PLAYER_W / 2;
+    const pcy = py + PLAYER_H / 2;
+    for (const c of collectibles) {
+      if (c.collected) continue;
+      const scx = c.worldX - cameraX;
+      const d2  = (scx - pcx) ** 2 + (c.y - pcy) ** 2;
+      if (d2 < 28 * 28) {
+        c.collected = true;
+        score += 25;
+        spawnCollectBurst(scx, c.y);
+      }
+    }
+
+    /* ---- Estela del jugador en el aire ---- */
+    if (!onGround && Math.random() < 0.5) {
+      playerTrail.push({ x: px + PLAYER_W / 2, y: py + PLAYER_H / 2, life: 0.25 });
+    }
+    for (let i = playerTrail.length - 1; i >= 0; i--) {
+      playerTrail[i].life -= dt;
+      if (playerTrail[i].life <= 0) playerTrail.splice(i, 1);
+    }
+
+    /* ---- Siguiente chunk de mundo ---- */
+    while (platformEndX < cameraX + W + 600) spawnPlatform();
+
+    /* ---- Culling de entidades fuera de pantalla ---- */
+    platforms    = platforms.filter(p => p.x + p.w > cameraX - 100);
+    spikes       = spikes.filter(s => s.worldX + s.w > cameraX - 100);
+    collectibles = collectibles.filter(c => !c.collected && c.worldX > cameraX - 100);
+
+    updateParticles(dt);
+  }
+
+  function updateParticles(dt) {
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i];
+      p.life -= dt;
+      if (p.life <= 0) { particles.splice(i, 1); continue; }
+      p.vy += 400 * dt;
+      p.x  += p.vx * dt;
+      p.y  += p.vy * dt;
+    }
+  }
+
+  function gameOverSequence() {
+    if (gameOver) return;
+    gameOver = true;
+
+    // Explosión de la nave
+    for (let i = 0; i < 24; i++) {
+      const ang = (i / 24) * Math.PI * 2;
+      const spd = rand(100, 350);
+      particles.push({
+        x: px + PLAYER_W / 2,
+        y: py + PLAYER_H / 2,
+        vx: Math.cos(ang) * spd,
+        vy: Math.sin(ang) * spd,
+        life: rand(0.4, 1.0),
+        maxLife: 1.0,
+        color: i % 3 === 0 ? YELLOW : CYAN,
+        size: 4
+      });
+    }
+
+    setTimeout(() => {
+      finalScore.textContent = String(Math.floor(score));
+      overlay.hidden = false;
+    }, 700);
+  }
+
+  /* ==================================================================
+     13. RENDER
+     ================================================================== */
+  function render() {
+    /* ---- Fondo con paralaje ---- */
+    ctx.drawImage(bgCanvas, 0, 0);
+    for (const layer of starLayers) {
+      const offset = mod(cameraX * layer.speed, W);
+      ctx.drawImage(layer.canvas, -offset, 0);
+      ctx.drawImage(layer.canvas, W - offset, 0);
+    }
+
+    /* ---- Plataformas ---- */
+    for (const p of platforms) {
+      const sx = p.x - cameraX;
+      if (sx + p.w < 0 || sx > W) continue;
+
+      const grad = ctx.createLinearGradient(0, GROUND_Y, 0, H);
+      grad.addColorStop(0, 'rgba(0, 240, 255, 0.15)');
+      grad.addColorStop(1, 'rgba(0, 240, 255, 0.02)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(sx, GROUND_Y, p.w, H - GROUND_Y);
+
+      ctx.save();
+      ctx.shadowBlur  = 18;
+      ctx.shadowColor = CYAN;
+      ctx.strokeStyle = CYAN;
+      ctx.lineWidth   = 3;
+      ctx.beginPath();
+      ctx.moveTo(sx, GROUND_Y);
+      ctx.lineTo(sx + p.w, GROUND_Y);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    /* ---- Pinchos (magenta) ---- */
+    for (const sp of spikes) {
+      const sx = sp.worldX - cameraX;
+      if (sx + sp.w < 0 || sx > W) continue;
+
+      ctx.save();
+      ctx.shadowBlur  = 16;
+      ctx.shadowColor = PINK;
+      ctx.strokeStyle = PINK;
+      ctx.fillStyle   = 'rgba(255, 0, 127, 0.25)';
+      ctx.lineWidth   = 2.5;
+
+      const count = Math.max(1, Math.floor(sp.w / 14));
+      const tw    = sp.w / count;
+      for (let i = 0; i < count; i++) {
+        const x0 = sx + i * tw;
+        ctx.beginPath();
+        ctx.moveTo(x0, GROUND_Y);
+        ctx.lineTo(x0 + tw / 2, GROUND_Y - sp.h);
+        ctx.lineTo(x0 + tw, GROUND_Y);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    /* ---- Caramelos (estrellas amarillas) ---- */
+    for (const c of collectibles) {
+      const sx = c.worldX - cameraX;
+      if (sx < -30 || sx > W + 30) continue;
+
+      const bob = Math.sin(elapsed * 4 + c.worldX * 0.01) * 4;
+
+      ctx.save();
+      ctx.translate(sx, c.y + bob);
+      ctx.shadowBlur  = 18;
+      ctx.shadowColor = YELLOW;
+      ctx.fillStyle   = YELLOW;
+      ctx.rotate(elapsed * 3);
+      drawStar(ctx, 0, 0, 5, 12, 5);
+      ctx.fill();
+
+      ctx.shadowBlur = 0;
+      ctx.fillStyle  = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(0, 0, 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    /* ---- Partículas ---- */
+    for (const p of particles) {
+      ctx.globalAlpha = Math.max(0, p.life / p.maxLife);
+      ctx.fillStyle   = p.color;
+      ctx.shadowBlur  = 8;
+      ctx.shadowColor = p.color;
+      ctx.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size);
+    }
+    ctx.globalAlpha = 1;
+    ctx.shadowBlur  = 0;
+
+    /* ---- Estela del jugador ---- */
+    for (const t of playerTrail) {
+      ctx.globalAlpha = (t.life / 0.25) * 0.4;
+      ctx.fillStyle   = CYAN;
+      ctx.beginPath();
+      ctx.arc(t.x, t.y, 8, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    /* ---- Jugador ---- */
+    if (!gameOver) drawPlayer();
+
+    /* ---- HUD ---- */
+    drawHUD();
+  }
+
+  function drawStar(ctx, cx, cy, spikes, outerR, innerR) {
+    let rot  = -Math.PI / 2;
+    const step = Math.PI / spikes;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - outerR);
+    for (let i = 0; i < spikes; i++) {
+      let x = cx + Math.cos(rot) * outerR;
+      let y = cy + Math.sin(rot) * outerR;
+      ctx.lineTo(x, y);
+      rot += step;
+      x = cx + Math.cos(rot) * innerR;
+      y = cy + Math.sin(rot) * innerR;
+      ctx.lineTo(x, y);
+      rot += step;
+    }
+    ctx.closePath();
+  }
+
+  function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+  }
+
+  function drawPlayer() {
+    const cx = px + PLAYER_W / 2;
+    const cy = py + PLAYER_H / 2;
+
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.scale(scaleX, scaleY);
+
+    // Cuerpo (candy con glow cyan)
+    ctx.shadowBlur  = 24;
+    ctx.shadowColor = CYAN;
+    ctx.strokeStyle = CYAN;
+    ctx.fillStyle   = 'rgba(0, 240, 255, 0.18)';
+    ctx.lineWidth   = 3;
+
+    roundRect(ctx, -PLAYER_W / 2, -PLAYER_H / 2, PLAYER_W, PLAYER_H, 10);
+    ctx.fill();
+    ctx.stroke();
+
+    // Núcleo brillante
+    ctx.shadowBlur  = 12;
+    ctx.shadowColor = '#ffffff';
+    ctx.fillStyle   = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(0, 0, 4, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Nubs laterales (aspecto caramelito)
+    ctx.shadowBlur  = 12;
+    ctx.shadowColor = CYAN;
+    ctx.fillStyle   = CYAN;
+    ctx.beginPath();
+    ctx.arc(-PLAYER_W / 2, 0, 3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(PLAYER_W / 2, 0, 3, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+  }
+
+  function drawHUD() {
+    ctx.save();
+    ctx.shadowBlur  = 12;
+    ctx.shadowColor = CYAN;
+    ctx.fillStyle   = CYAN;
+    ctx.font        = '700 28px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign    = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText(String(Math.floor(score)).padStart(5, '0'), 24, 22);
+
+    ctx.font       = '600 13px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+    ctx.fillStyle  = 'rgba(255, 255, 255, 0.5)';
+    ctx.shadowBlur = 0;
+    ctx.fillText('SPEED ' + Math.round(speed), 24, 60);
+    ctx.restore();
+  }
+
+  /* ==================================================================
+     14. BUCLE PRINCIPAL
+     ================================================================== */
+  let lastTime = 0;
+
+  function loop(ts) {
+    if (!lastTime) lastTime = ts;
+
+    let dt = (ts - lastTime) / 1000;
+    lastTime = ts;
+
+    if (dt > 0.05) dt = 0.05;
+    if (dt < 0)    dt = 0;
+
+    if (!document.hidden) {
+      update(dt);
+      render();
+    }
+
+    requestAnimationFrame(loop);
+  }
+
+  /* ==================================================================
+     15. ENTRADA — TECLADO
+     ------------------------------------------------------------------
+     · Space / ArrowUp / W → salto
+     · `e.repeat` bloquea el auto-repeat del SO (evita saltos fantasma)
+     ================================================================== */
+  window.addEventListener('keydown', (e) => {
+    if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') {
+      e.preventDefault();
+      if (e.repeat) return;
+      input.jump = true;
+    }
+  }, { passive: false });
+
+  window.addEventListener('keyup', (e) => {
+    if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') {
+      e.preventDefault();
+      input.jump = false;
+    }
+  }, { passive: false });
+
+  /* ==================================================================
+     16. ENTRADA — TÁCTIL (cualquier parte del canvas)
+     ------------------------------------------------------------------
+     · touchstart → input.jump = true, jumpHeld = false (fuerza nuevo edge)
+     · touchend   → input.jump = false (solo cuando no quedan dedos)
+     · preventDefault evita clics fantasma, zoom y scroll accidental
+     ================================================================== */
+  canvas.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    input.jump = true;
+    jumpHeld   = false;    // garantiza que el próximo update procese un edge
+  }, { passive: false });
+
+  canvas.addEventListener('touchend', (e) => {
+    e.preventDefault();
+    if (e.touches.length === 0) input.jump = false;
+  }, { passive: false });
+
+  canvas.addEventListener('touchcancel', (e) => {
+    e.preventDefault();
+    input.jump = false;
+  }, { passive: false });
+
+  // Fallback con ratón (útil en escritorio / pruebas)
+  canvas.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    input.jump = true;
+    jumpHeld   = false;
+  });
+  canvas.addEventListener('mouseup', () => {
+    input.jump = false;
+  });
+
+  /* ==================================================================
+     17. CICLO DE VIDA
+     ================================================================== */
+  window.addEventListener('blur', () => {
+    input.jump = false;
+    jumpHeld   = false;
+  });
+
+  document.addEventListener('visibilitychange', () => {
+    lastTime = 0;
+    if (document.hidden) {
+      input.jump = false;
+      jumpHeld   = false;
+    }
+  });
+
+  btnRestart.addEventListener('click', (e) => {
+    e.preventDefault();
+    reset();
+  });
+
+  /* ==================================================================
+     18. ARRANQUE
+     ================================================================== */
+  initBackgrounds();
+  reset();
+  requestAnimationFrame(loop);
+
+})();
+</script>
+</body>
+</html>

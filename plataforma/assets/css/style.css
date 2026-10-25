@@ -1,0 +1,529 @@
+/* ==========================================================================
+   Portal Arcade HodoMunla · Fase 3: Temática Visual + Juiciness
+   Deep Space Candy · Mobile First · 60fps target
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   0. Variables — paleta mandatoria del contexto + tokens de sistema
+   -------------------------------------------------------------------------- */
+:root {
+  /* --- Paleta obligatoria (Restricción Absoluta del contexto) --- */
+  --bg-space:      #0b0914;
+  --candy-pink:    #ff007f;
+  --candy-cyan:    #00f0ff;
+  --candy-yellow:  #ffde00;
+  --glass-bg:      rgba(255, 255, 255, 0.05);
+
+  /* --- Tokens de sistema (layout / motion) --- */
+  --header-h:      60px;
+  --page-gutter:   16px;
+  --grid-gap:      16px;
+  --radius-base:   18px;
+  --tap-target:    44px;
+
+  /* Motion: la curva elástica es obligatoria para "juiciness" (contexto §4) */
+  --ease-elastic:  cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  --ease-smooth:   cubic-bezier(0.4, 0, 0.2, 1);
+  --dur-tap:       150ms;
+
+  /* Colores derivados para gradientes / glow (complementarios a la paleta) */
+  --glass-border:  rgba(255, 255, 255, 0.10);
+  --glass-shadow:  rgba(0, 0, 0, 0.35);
+  --text-soft:     rgba(255, 255, 255, 0.72);
+}
+
+/* --------------------------------------------------------------------------
+   1. Reset y base
+   -------------------------------------------------------------------------- */
+*,
+*::before,
+*::after { box-sizing: border-box; }
+
+* { margin: 0; padding: 0; }
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  scroll-behavior: smooth;
+}
+
+body {
+  min-height: 100vh;
+  min-height: 100dvh;
+  color: #ffffff;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  line-height: 1.4;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  /* Fondo espacial: capa base + nebulosas suaves + campo estelar */
+  background-color: var(--bg-space);
+  background-image:
+    radial-gradient(ellipse 80% 60% at 15% 0%,   rgba(255, 0, 127, 0.18), transparent 60%),
+    radial-gradient(ellipse 70% 50% at 90% 15%,  rgba(0, 240, 255, 0.14), transparent 60%),
+    radial-gradient(ellipse 90% 60% at 50% 110%, rgba(255, 222, 0, 0.10), transparent 65%),
+    linear-gradient(180deg, #0b0914 0%, #0f0c29 45%, #0b0914 100%);
+  background-attachment: fixed;
+}
+
+/* Campo estelar CSS-only (sin imágenes, sin peticiones de red) */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.55;
+  background-image:
+    radial-gradient(1px 1px at 12% 8%,  #ffffff 50%, transparent 51%),
+    radial-gradient(1px 1px at 43% 21%, #ffffff 50%, transparent 51%),
+    radial-gradient(1.5px 1.5px at 78% 14%, #ffffff 50%, transparent 51%),
+    radial-gradient(1px 1px at 88% 62%, #ffffff 50%, transparent 51%),
+    radial-gradient(1px 1px at 23% 74%, #ffffff 50%, transparent 51%),
+    radial-gradient(1.5px 1.5px at 62% 88%, #ffffff 50%, transparent 51%),
+    radial-gradient(1px 1px at 8% 48%, #ffffff 50%, transparent 51%),
+    radial-gradient(1px 1px at 55% 55%, #ffffff 50%, transparent 51%);
+  background-size:
+    260px 260px, 320px 320px, 380px 380px, 300px 300px,
+    340px 340px, 420px 420px, 280px 280px, 360px 360px;
+}
+
+/* Bloqueo de scroll al abrir el modal (lo alterna main.js) */
+body.modal-open { overflow: hidden; }
+
+img, svg, video, canvas { display: block; max-width: 100%; }
+ul, ol { list-style: none; }
+
+h1, h2, h3 { line-height: 1.2; font-weight: 800; }
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+[hidden] { display: none !important; }
+
+/* --------------------------------------------------------------------------
+   2. Header — cristal espacial, fijo
+   -------------------------------------------------------------------------- */
+.site-header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  z-index: 100;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  min-height: var(--header-h);
+  height: calc(var(--header-h) + env(safe-area-inset-top, 0px));
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-right: var(--page-gutter);
+  padding-left: var(--page-gutter);
+
+  background: rgba(11, 9, 20, 0.65);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+          backdrop-filter: blur(14px) saturate(140%);
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.site-title {
+  font-size: 1.5rem;
+  letter-spacing: 0.04em;
+  background: linear-gradient(90deg, var(--candy-pink), var(--candy-cyan) 55%, var(--candy-yellow));
+  -webkit-background-clip: text;
+          background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 0 12px rgba(255, 0, 127, 0.35));
+}
+
+/* --------------------------------------------------------------------------
+   3. Grilla Mobile First (1 columna)
+   -------------------------------------------------------------------------- */
+.game-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--grid-gap);
+  width: 100%;
+
+  padding-top: calc(var(--header-h) + env(safe-area-inset-top, 0px) + var(--page-gutter));
+  padding-right: var(--page-gutter);
+  padding-bottom: calc(var(--page-gutter) + env(safe-area-inset-bottom, 0px));
+  padding-left: var(--page-gutter);
+}
+
+/* --------------------------------------------------------------------------
+   4. Game Cards — Glassmorphism espacial
+   -------------------------------------------------------------------------- */
+.game-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 14px;
+  min-height: 148px;
+  padding: 18px;
+  border-radius: var(--radius-base);
+
+  /* Capa de cristal */
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  -webkit-backdrop-filter: blur(10px) saturate(140%);
+          backdrop-filter: blur(10px) saturate(140%);
+  box-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+
+  /* Tinte neón sutil en el borde superior */
+  overflow: hidden;
+  isolation: isolate;
+  will-change: transform;
+
+  /* Solo transform + opacity se animan (regla de rendimiento) */
+  transition:
+    transform var(--dur-tap) var(--ease-elastic),
+    opacity   var(--dur-tap) var(--ease-smooth);
+}
+
+/* Franja neón superior en la tarjeta (decorativo, sin layout cost) */
+.game-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--candy-pink), var(--candy-cyan), var(--candy-yellow));
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+/* Glow neón que se enciende al pulsar (solo opacity → GPU-friendly) */
+.game-card::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: -1;
+  opacity: 0;
+  box-shadow:
+    0 0 22px rgba(255, 0, 127, 0.55),
+    0 0 42px rgba(0, 240, 255, 0.35);
+  transition: opacity var(--dur-tap) var(--ease-smooth);
+}
+
+.game-card:active {
+  transform: scale(0.98);
+}
+.game-card:active::after { opacity: 1; }
+
+.game-card__title {
+  font-size: 1.125rem;
+  letter-spacing: 0.01em;
+  color: #ffffff;
+}
+
+/* Fallback para navegadores sin backdrop-filter (GPU gama baja) */
+@supports not ((backdrop-filter: blur(10px)) or (-webkit-backdrop-filter: blur(10px))) {
+  .game-card { background: rgba(20, 16, 40, 0.85); }
+  .site-header { background: rgba(11, 9, 20, 0.92); }
+}
+
+/* --------------------------------------------------------------------------
+   5. Botón "Jugar" — gradiente Candy + respuesta elástica
+   -------------------------------------------------------------------------- */
+.play-btn {
+  position: relative;
+  align-self: stretch;
+  min-height: var(--tap-target);
+  padding: 0 22px;
+  border-radius: 999px;
+
+  font-weight: 800;
+  font-size: 1rem;
+  letter-spacing: 0.03em;
+  color: #0b0914;                 /* Texto oscuro para contraste sobre neón */
+
+  background-image: linear-gradient(135deg, var(--candy-pink) 0%, var(--candy-cyan) 100%);
+  box-shadow:
+    0 6px 18px rgba(255, 0, 127, 0.30),
+    0 0 0 1px rgba(255, 255, 255, 0.10) inset;
+
+  will-change: transform;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+
+  /* Animamos SOLO transform + opacity */
+  transition:
+    transform var(--dur-tap) var(--ease-elastic),
+    opacity   var(--dur-tap) var(--ease-smooth);
+}
+
+/* Glow de refuerzo al pulsar (fade por opacity) */
+.play-btn::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(circle at 50% 50%,
+    rgba(255, 0, 127, 0.55) 0%,
+    rgba(0, 240, 255, 0.35) 45%,
+    transparent 70%);
+  transition: opacity var(--dur-tap) var(--ease-smooth);
+  z-index: -1;
+}
+
+/* Microinteracción elástica (rebote al soltar) */
+.play-btn:active {
+  transform: scale(0.94);
+  opacity: 0.92;
+}
+.play-btn:active::after { opacity: 1; }
+
+/* Feedback accesible por teclado (sin romper mobile-first) */
+.play-btn:focus-visible,
+.modal__close:focus-visible {
+  outline: 2px solid var(--candy-yellow);
+  outline-offset: 3px;
+}
+
+/* --------------------------------------------------------------------------
+   6. Modal — pantalla completa, aislado del portal
+   -------------------------------------------------------------------------- */
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+
+  display: flex;
+  flex-direction: column;
+
+  background-color: #000000;      /* Aislamiento total del juego */
+  overflow: hidden;
+  overscroll-behavior: contain;
+
+  /* Aparición suave solo con opacity (regla de rendimiento) */
+  animation: modal-in 180ms var(--ease-smooth) both;
+}
+
+@keyframes modal-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.modal__content {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.modal__header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px var(--page-gutter);
+  padding-top: calc(12px + env(safe-area-inset-top, 0px));
+
+  background: rgba(11, 9, 20, 0.9);
+  -webkit-backdrop-filter: blur(12px);
+          backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.modal__title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.modal__close {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--tap-target);
+  height: var(--tap-target);
+  border-radius: 50%;
+  font-size: 1.75rem;
+  line-height: 1;
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--glass-border);
+
+  will-change: transform;
+  transition:
+    transform var(--dur-tap) var(--ease-elastic),
+    opacity   var(--dur-tap) var(--ease-smooth);
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.modal__close:active { transform: scale(0.9); opacity: 0.85; }
+
+.modal__iframe-container {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  overflow: hidden;
+  background-color: var(--bg-space);
+}
+
+.modal__iframe-container > iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background-color: var(--bg-space);
+}
+
+/* --------------------------------------------------------------------------
+   7. Vista de escritorio — emulador de pantalla móvil
+   -------------------------------------------------------------------------- */
+@media (min-width: 600px) {
+  .game-grid {
+    max-width: 500px;
+    margin-right: auto;
+    margin-left: auto;
+    padding-right: 0;
+    padding-left: 0;
+  }
+
+  .modal {
+    align-items: center;
+    justify-content: center;
+  }
+
+  .modal__content {
+    max-width: 500px;
+    height: 100dvh;
+    margin-right: auto;
+    margin-left: auto;
+    box-shadow: 0 0 60px rgba(0, 240, 255, 0.08);
+  }
+}
+
+/* --------------------------------------------------------------------------
+   8. Accesibilidad: respeto por movimiento reducido
+   -------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+
+  .game-card,
+  .play-btn,
+  .modal__close,
+  .game-card::after,
+  .play-btn::after {
+    transition-duration: 1ms !important;
+  }
+
+  .game-card:active,
+  .play-btn:active,
+  .modal__close:active {
+    transform: none;
+  }
+
+  .modal { animation: none; }
+}
+
+/* --------------------------------------------------------------------------
+   1. Capa estelar rotatoria (sustituye al body::before anterior)
+   --------------------------------------------------------------------------
+   - Tamaño 200vmax × 200vmax con offsets negativos: garantiza que, al girar,
+     las esquinas del viewport SIEMPRE queden cubiertas (el círculo inscrito
+     de 200vmax tiene un radio de 100vmax > diagonal máxima de cualquier
+     viewport real).
+   - Eliminamos `inset: 0` porque ahora las dimensiones son explícitas.
+   - Animación de 240 s (4 min) muy sutil → imperceptible como "movimiento
+     brusco" pero perceptible como parallax tras unos segundos.
+   -------------------------------------------------------------------------- */
+body::before {
+  content: "";
+  position: fixed;
+  top: -50vmax;
+  left: -50vmax;
+  width: 200vmax;
+  height: 200vmax;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.55;
+
+  background-image:
+    radial-gradient(1px 1px at 12% 8%,  #ffffff 50%, transparent 51%),
+    radial-gradient(1px 1px at 43% 21%, #ffffff 50%, transparent 51%),
+    radial-gradient(1.5px 1.5px at 78% 14%, #ffffff 50%, transparent 51%),
+    radial-gradient(1px 1px at 88% 62%, #ffffff 50%, transparent 51%),
+    radial-gradient(1px 1px at 23% 74%, #ffffff 50%, transparent 51%),
+    radial-gradient(1.5px 1.5px at 62% 88%, #ffffff 50%, transparent 51%),
+    radial-gradient(1px 1px at 8% 48%, #ffffff 50%, transparent 51%),
+    radial-gradient(1px 1px at 55% 55%, #ffffff 50%, transparent 51%);
+  background-size:
+    260px 260px, 320px 320px, 380px 380px, 300px 300px,
+    340px 340px, 420px 420px, 280px 280px, 360px 360px;
+
+  /* Rotación lenta y constante. `linear infinite` = velocidad uniforme,
+     sin sensación de "acelerar/frenar" que distraería al usuario. */
+  animation: spin-stars 240s linear infinite;
+
+  /* Promoción a capa GPU: la rotación se ejecuta en el compositor,
+     sin repaints ni recálculos de layout. */
+  will-change: transform;
+  transform-origin: center center;
+}
+
+@keyframes spin-stars {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* --------------------------------------------------------------------------
+   8. Accesibilidad: respeto por movimiento reducido (actualizado)
+   --------------------------------------------------------------------------
+   Ahora también detenemos la rotación del campo estelar con !important,
+   porque el usuario con `prefers-reduced-motion: reduce` puede sentir
+   mareo o molestias por el movimiento continuo de fondo.
+   -------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+
+  /* 🔽 Nuevo: detiene por completo el giro del cielo estrellado */
+  body::before {
+    animation: none !important;
+  }
+
+  .game-card,
+  .play-btn,
+  .modal__close,
+  .game-card::after,
+  .play-btn::after {
+    transition-duration: 1ms !important;
+  }
+
+  .game-card:active,
+  .play-btn:active,
+  .modal__close:active {
+    transform: none;
+  }
+
+  .modal { animation: none; }
+}

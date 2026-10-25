@@ -1,0 +1,905 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0b0914">
+<title>Asteroids Neón · HodoMunla</title>
+<style>
+  /* ======================================================================
+     Asteroids Neón — estilos de aislamiento
+     Mobile-First · sin scroll · sin zoom · sin selección
+     ====================================================================== */
+  :root {
+    --bg-space:      #0b0914;
+    --candy-pink:    #ff007f;
+    --candy-cyan:    #00f0ff;
+    --candy-yellow:  #ffde00;
+    --ease-elastic:  cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: var(--bg-space);
+    color: #fff;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    touch-action: none;
+    overscroll-behavior: none;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* ---------- Escenario ---------- */
+  #stage {
+    position: fixed;
+    inset: 0;
+  }
+
+  #game {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;          /* mantiene la proporción del bitmap */
+    background: var(--bg-space);  /* el letterbox se funde con el fondo */
+  }
+
+  /* ======================================================================
+     Controles táctiles — Mobile First
+     ======================================================================
+     · Default: visibles (para móviles con pointer: coarse).
+     · Media query más abajo los oculta si el dispositivo tiene puntero
+       fino o hover (escritorio con mouse, laptops híbridas).
+     ====================================================================== */
+  .touch-controls {
+    position: fixed;
+    inset: 0;
+    z-index: 5;
+    pointer-events: none;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    padding:
+      0
+      calc(14px + env(safe-area-inset-right, 0px))
+      calc(20px + env(safe-area-inset-bottom, 0px))
+      calc(14px + env(safe-area-inset-left, 0px));
+  }
+
+  .cluster {
+    display: flex;
+    align-items: flex-end;
+    gap: 12px;
+    pointer-events: none;
+  }
+
+  .ctl {
+    pointer-events: auto;
+    display: grid;
+    place-items: center;
+    width: 68px;
+    height: 68px;
+    border-radius: 50%;
+    border: 2px solid rgba(0, 240, 255, 0.45);
+    background: rgba(0, 240, 255, 0.07);
+    color: var(--candy-cyan);
+    font-size: 1.35rem;
+    font-weight: 700;
+    line-height: 1;
+    touch-action: none;
+    -webkit-tap-highlight-color: transparent;
+    box-shadow:
+      0 0 14px rgba(0, 240, 255, 0.18),
+      inset 0 0 12px rgba(0, 240, 255, 0.08);
+    will-change: transform, opacity;
+    transition:
+      transform 0.12s var(--ease-elastic),
+      opacity   0.12s ease;
+  }
+
+  .ctl.active {
+    transform: scale(0.9);
+    opacity: 0.7;
+  }
+
+  #btn-thrust {
+    border-color: rgba(255, 222, 0, 0.45);
+    color: var(--candy-yellow);
+    background: rgba(255, 222, 0, 0.07);
+    box-shadow:
+      0 0 14px rgba(255, 222, 0, 0.18),
+      inset 0 0 12px rgba(255, 222, 0, 0.08);
+  }
+
+  #btn-fire {
+    width: 82px;
+    height: 82px;
+    font-size: 1.55rem;
+    border-color: rgba(255, 0, 127, 0.55);
+    color: var(--candy-yellow);
+    background: rgba(255, 0, 127, 0.12);
+    box-shadow:
+      0 0 20px rgba(255, 0, 127, 0.28),
+      inset 0 0 14px rgba(255, 0, 127, 0.12);
+  }
+
+  /* ---------- Hint de teclado (solo escritorio) ---------- */
+  .hint {
+    display: none;
+    position: fixed;
+    left: 50%;
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    transform: translateX(-50%);
+    z-index: 4;
+    color: rgba(255, 255, 255, 0.45);
+    font-size: 0.72rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    pointer-events: none;
+    white-space: nowrap;
+  }
+
+  /* ---------- Visibilidad inteligente ----------
+     Ocultamos los controles táctiles cuando el dispositivo tiene
+     puntero fino o capacidad de hover (típico de escritorio).
+     Si el dispositivo reporta pointer: coarse, permanecen visibles. */
+  @media (pointer: fine), (hover: hover) {
+    .touch-controls { display: none; }
+    .hint           { display: block; }
+  }
+
+  /* ---------- Overlay Game Over ---------- */
+  #overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    padding: 24px;
+    text-align: center;
+    background: rgba(11, 9, 20, 0.72);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+    animation: fade-in 0.25s ease both;
+  }
+
+  #overlay[hidden] { display: none; }
+
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+
+  #overlay h2 {
+    font-size: clamp(2rem, 9vw, 3rem);
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    color: var(--candy-pink);
+    text-shadow:
+      0 0 18px rgba(255, 0, 127, 0.85),
+      0 0 42px rgba(255, 0, 127, 0.45);
+  }
+
+  #overlay p {
+    font-size: 1.05rem;
+    color: rgba(255, 255, 255, 0.78);
+  }
+
+  #overlay p span {
+    color: var(--candy-cyan);
+    font-weight: 800;
+    text-shadow: 0 0 12px rgba(0, 240, 255, 0.7);
+  }
+
+  #btn-restart {
+    margin-top: 8px;
+    min-height: 54px;
+    padding: 0 36px;
+    border-radius: 999px;
+    font-size: 1rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    color: #0b0914;
+    background-image: linear-gradient(135deg, #ff007f 0%, #00f0ff 100%);
+    box-shadow:
+      0 6px 22px rgba(255, 0, 127, 0.35),
+      inset 0 1px 0 rgba(255, 255, 255, 0.25);
+    touch-action: manipulation;
+    will-change: transform;
+    transition: transform 0.15s var(--ease-elastic);
+  }
+
+  #btn-restart:active { transform: scale(0.94); }
+
+  #btn-restart:focus-visible {
+    outline: 2px solid var(--candy-yellow);
+    outline-offset: 3px;
+  }
+</style>
+</head>
+<body>
+
+  <div id="stage">
+    <canvas id="game" width="540" height="1080"></canvas>
+  </div>
+
+  <!-- Controles táctiles: se ocultan solos en dispositivos con puntero fino -->
+  <div class="touch-controls">
+    <div class="cluster">
+      <button class="ctl" id="btn-left"  type="button" aria-label="Rotar izquierda">◀</button>
+      <button class="ctl" id="btn-right" type="button" aria-label="Rotar derecha">▶</button>
+    </div>
+    <div class="cluster">
+      <button class="ctl" id="btn-thrust" type="button" aria-label="Propulsor">▲</button>
+      <button class="ctl" id="btn-fire"   type="button" aria-label="Disparar">✹</button>
+    </div>
+  </div>
+
+  <div class="hint">← → rotar · ↑ propulsar · SPACE disparar</div>
+
+  <div id="overlay" hidden>
+    <h2>GAME OVER</h2>
+    <p>Puntuación: <span id="final-score">0</span></p>
+    <button id="btn-restart" type="button">REINICIAR</button>
+  </div>
+
+<script>
+(() => {
+  'use strict';
+
+  /* ==================================================================
+     1. CONSTANTES
+     ================================================================== */
+  const W = 540;   // resolución interna (aspecto 1:2, encaja en móvil)
+  const H = 1080;
+
+  const BG     = '#0b0914';
+  const CYAN   = '#00f0ff';
+  const PINK   = '#ff007f';
+  const YELLOW = '#ffde00';
+
+  // Física de la nave
+  const TURN_SPEED = 4.0;    // rad/s
+  const THRUST_ACC = 430;    // px/s²
+  const MAX_SPEED  = 450;    // px/s
+  const DRAG       = 0.90;   // factor de arrastre por segundo
+
+  // Disparo
+  const BULLET_SPEED = 650;
+  const BULLET_LIFE  = 1.10;
+  const FIRE_COOL    = 0.16;
+  const MAX_BULLETS  = 14;
+
+  // Tamaños
+  const SHIP_R   = 13;
+  const BULLET_R = 2.4;
+
+  // Asteroides: [grande, mediano, pequeño]
+  const AST_RADII = [52, 30, 16];
+  const AST_SPEED = [[40, 78], [62, 108], [88, 145]];
+  const AST_SCORE = [20, 50, 100];
+  const AST_VERTS = [11, 9, 7];
+
+  /* ==================================================================
+     2. CANVAS Y DOM
+     ================================================================== */
+  const canvas = document.getElementById('game');
+  const ctx    = canvas.getContext('2d', { alpha: false });
+  canvas.width  = W;
+  canvas.height = H;
+
+  const overlay    = document.getElementById('overlay');
+  const finalScore = document.getElementById('final-score');
+  const btnRestart = document.getElementById('btn-restart');
+
+  /* ==================================================================
+     3. ESTADO DE ENTRADA UNIFICADO
+     ------------------------------------------------------------------
+     · input[]      → lo ÚNICO que lee la lógica del juego.
+     · keyState[]   → estado granular de teclado.
+     · touchState[] → estado granular de los botones táctiles.
+     · syncInput()  → combina ambos mediante OR (fuente agnóstica).
+     ------------------------------------------------------------------
+     Esto evita que soltar un dedo cancele una tecla pulsada y
+     viceversa. La nave solo obedece a `input`.
+     ================================================================== */
+  const input      = { left: false, right: false, thrust: false, fire: false };
+  const keyState   = { left: false, right: false, thrust: false, fire: false };
+  const touchState = { left: false, right: false, thrust: false, fire: false };
+
+  function syncInput(key) {
+    input[key] = touchState[key] || keyState[key];
+  }
+
+  function setKeyState(key, value) {
+    if (keyState[key] === value) return;
+    keyState[key] = value;
+    syncInput(key);
+  }
+
+  function setTouchState(key, value, el) {
+    touchState[key] = value;
+    if (el) el.classList.toggle('active', value);
+    syncInput(key);
+  }
+
+  function releaseAllInputs() {
+    for (const k of ['left', 'right', 'thrust', 'fire']) {
+      keyState[k] = false;
+      touchState[k] = false;
+      input[k] = false;
+    }
+    document.querySelectorAll('.ctl.active')
+      .forEach(el => el.classList.remove('active'));
+  }
+
+  /* ==================================================================
+     4. ESTADO DEL JUEGO
+     ================================================================== */
+  let ship      = null;
+  let asteroids = [];
+  let bullets   = [];
+  let particles = [];
+  let score     = 0;
+  let gameOver  = true;
+  let fireCd    = 0;
+  let overTimer = 0;
+  let lastTime  = 0;
+  let starfield = null;
+
+  /* ==================================================================
+     5. UTILIDADES MATEMÁTICAS
+     ================================================================== */
+  const mod  = (n, m) => ((n % m) + m) % m;
+  const rand = (a, b) => a + Math.random() * (b - a);
+
+  /** Distancia² en espacio toroidal (bordes conectados). */
+  function toroidalDist2(ax, ay, bx, by) {
+    let dx = Math.abs(ax - bx);
+    let dy = Math.abs(ay - by);
+    if (dx > W * 0.5) dx = W - dx;
+    if (dy > H * 0.5) dy = H - dy;
+    return dx * dx + dy * dy;
+  }
+
+  /** Ejecuta fn en las copias necesarias para simular el toroide. */
+  function forEachWrap(x, y, r, fn) {
+    fn(x, y);
+    const L = x < r, R = x > W - r, T = y < r, B = y > H - r;
+    if (L) fn(x + W, y);
+    if (R) fn(x - W, y);
+    if (T) fn(x, y + H);
+    if (B) fn(x, y - H);
+    if (L && T) fn(x + W, y + H);
+    if (L && B) fn(x + W, y - H);
+    if (R && T) fn(x - W, y + H);
+    if (R && B) fn(x - W, y - H);
+  }
+
+  /* ==================================================================
+     6. FONDO ESTELAR PRERENDERIZADO
+     ================================================================== */
+  function buildStarfield() {
+    const c = document.createElement('canvas');
+    c.width  = W;
+    c.height = H;
+    const g = c.getContext('2d');
+
+    g.fillStyle = BG;
+    g.fillRect(0, 0, W, H);
+
+    const nebulas = [
+      [W * 0.20, H * 0.14, 'rgba(255, 0, 127, 0.10)'],
+      [W * 0.85, H * 0.52, 'rgba(0, 240, 255, 0.09)'],
+      [W * 0.42, H * 0.88, 'rgba(255, 222, 0, 0.06)']
+    ];
+    for (const [nx, ny, col] of nebulas) {
+      const rg = g.createRadialGradient(nx, ny, 0, nx, ny, W * 0.8);
+      rg.addColorStop(0, col);
+      rg.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      g.fillStyle = rg;
+      g.fillRect(0, 0, W, H);
+    }
+
+    for (let i = 0; i < 160; i++) {
+      const x = Math.random() * W;
+      const y = Math.random() * H;
+      const r = Math.random() * 1.3 + 0.3;
+      const roll = Math.random();
+      g.globalAlpha = 0.25 + Math.random() * 0.55;
+      g.fillStyle = roll < 0.14 ? CYAN : roll < 0.26 ? PINK : '#ffffff';
+      g.beginPath();
+      g.arc(x, y, r, 0, Math.PI * 2);
+      g.fill();
+    }
+    g.globalAlpha = 1;
+
+    return c;
+  }
+
+  /* ==================================================================
+     7. FÁBRICAS
+     ================================================================== */
+  function makeAsteroid(x, y, size) {
+    const radius = AST_RADII[size];
+    const n      = AST_VERTS[size];
+    const verts  = [];
+
+    for (let i = 0; i < n; i++) {
+      verts.push({
+        a: (i / n) * Math.PI * 2,
+        r: radius * rand(0.74, 1.06)
+      });
+    }
+
+    const sp  = rand(AST_SPEED[size][0], AST_SPEED[size][1]);
+    const dir = Math.random() * Math.PI * 2;
+
+    return {
+      x, y, size, radius, verts,
+      vx: Math.cos(dir) * sp,
+      vy: Math.sin(dir) * sp,
+      angle: Math.random() * Math.PI * 2,
+      spin: rand(-1.1, 1.1)
+    };
+  }
+
+  /* ==================================================================
+     8. REINICIO
+     ================================================================== */
+  function reset() {
+    clearTimeout(overTimer);
+    overlay.hidden = true;
+
+    score     = 0;
+    bullets   = [];
+    particles = [];
+    asteroids = [];
+    fireCd    = 0;
+    lastTime  = 0;
+    gameOver  = false;
+
+    ship = {
+      x: W * 0.5,
+      y: H * 0.5,
+      vx: 0,
+      vy: 0,
+      angle: -Math.PI * 0.5,
+      thrusting: false
+    };
+
+    // 4 asteroides grandes, nunca encima de la nave
+    for (let i = 0; i < 4; i++) {
+      let x, y, tries = 0;
+      do {
+        x = Math.random() * W;
+        y = Math.random() * H;
+        tries++;
+      } while (toroidalDist2(x, y, W * 0.5, H * 0.5) < 240 * 240 && tries < 60);
+      asteroids.push(makeAsteroid(x, y, 0));
+    }
+
+    // Limpieza total de entradas al reiniciar
+    releaseAllInputs();
+  }
+
+  /* ==================================================================
+     9. ACCIONES
+     ================================================================== */
+  function fire() {
+    const ca = Math.cos(ship.angle);
+    const sa = Math.sin(ship.angle);
+    const nose = 18;
+
+    bullets.push({
+      x: mod(ship.x + ca * nose, W),
+      y: mod(ship.y + sa * nose, H),
+      vx: ca * BULLET_SPEED + ship.vx * 0.35,
+      vy: sa * BULLET_SPEED + ship.vy * 0.35,
+      life: BULLET_LIFE
+    });
+  }
+
+  function burst(x, y, size, color) {
+    const count = 8 + size * 6;
+    for (let i = 0; i < count; i++) {
+      if (particles.length > 160) break;
+      const ang = Math.random() * Math.PI * 2;
+      const spd = rand(60, 220) * (1 - size * 0.15);
+      const life = rand(0.35, 0.9);
+      particles.push({
+        x, y,
+        vx: Math.cos(ang) * spd,
+        vy: Math.sin(ang) * spd,
+        life,
+        maxLife: life,
+        color: Math.random() < 0.3 ? YELLOW : color
+      });
+    }
+  }
+
+  function splitAsteroid(index) {
+    const a = asteroids[index];
+    asteroids.splice(index, 1);
+
+    score += AST_SCORE[a.size];
+    burst(a.x, a.y, a.size, PINK);
+
+    if (a.size < 2) {
+      const childSize = a.size + 1;
+      for (let k = 0; k < 2; k++) {
+        const child = makeAsteroid(a.x, a.y, childSize);
+        child.vx = child.vx * 0.6 + a.vx * 0.6;
+        child.vy = child.vy * 0.6 + a.vy * 0.6;
+        const ang = Math.random() * Math.PI * 2;
+        child.x = mod(a.x + Math.cos(ang) * child.radius * 0.4, W);
+        child.y = mod(a.y + Math.sin(ang) * child.radius * 0.4, H);
+        asteroids.push(child);
+      }
+    }
+  }
+
+  function destroyShip() {
+    gameOver = true;
+    burst(ship.x, ship.y, 2, CYAN);
+    burst(ship.x, ship.y, 1, YELLOW);
+    releaseAllInputs();
+
+    overTimer = setTimeout(() => {
+      finalScore.textContent = String(score);
+      overlay.hidden = false;
+    }, 650);
+  }
+
+  /* ==================================================================
+     10. UPDATE — lógica de simulación (lee SOLO de `input`)
+     ================================================================== */
+  function update(dt) {
+    /* -------- Nave -------- */
+    if (!gameOver) {
+      if (input.left)  ship.angle -= TURN_SPEED * dt;
+      if (input.right) ship.angle += TURN_SPEED * dt;
+
+      ship.thrusting = input.thrust;
+      if (ship.thrusting) {
+        ship.vx += Math.cos(ship.angle) * THRUST_ACC * dt;
+        ship.vy += Math.sin(ship.angle) * THRUST_ACC * dt;
+      }
+
+      const drag = Math.pow(DRAG, dt);
+      ship.vx *= drag;
+      ship.vy *= drag;
+
+      const sp = Math.hypot(ship.vx, ship.vy);
+      if (sp > MAX_SPEED) {
+        ship.vx = (ship.vx / sp) * MAX_SPEED;
+        ship.vy = (ship.vy / sp) * MAX_SPEED;
+      }
+
+      ship.x = mod(ship.x + ship.vx * dt, W);
+      ship.y = mod(ship.y + ship.vy * dt, H);
+
+      if (input.fire) {
+        fireCd -= dt;
+        if (fireCd <= 0 && bullets.length < MAX_BULLETS) {
+          fire();
+          fireCd = FIRE_COOL;
+        }
+      } else {
+        fireCd = 0;
+      }
+    }
+
+    /* -------- Balas -------- */
+    for (let i = bullets.length - 1; i >= 0; i--) {
+      const b = bullets[i];
+      b.life -= dt;
+      if (b.life <= 0) { bullets.splice(i, 1); continue; }
+      b.x = mod(b.x + b.vx * dt, W);
+      b.y = mod(b.y + b.vy * dt, H);
+    }
+
+    /* -------- Asteroides -------- */
+    for (const a of asteroids) {
+      a.x = mod(a.x + a.vx * dt, W);
+      a.y = mod(a.y + a.vy * dt, H);
+      a.angle += a.spin * dt;
+    }
+
+    /* -------- Partículas -------- */
+    const pDrag = Math.pow(0.25, dt);
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i];
+      p.life -= dt;
+      if (p.life <= 0) { particles.splice(i, 1); continue; }
+      p.x = mod(p.x + p.vx * dt, W);
+      p.y = mod(p.y + p.vy * dt, H);
+      p.vx *= pDrag;
+      p.vy *= pDrag;
+    }
+
+    /* -------- Colisión bala ↔ asteroide -------- */
+    for (let i = bullets.length - 1; i >= 0; i--) {
+      const b = bullets[i];
+      for (let j = asteroids.length - 1; j >= 0; j--) {
+        const a  = asteroids[j];
+        const rr = a.radius + BULLET_R;
+        if (toroidalDist2(b.x, b.y, a.x, a.y) < rr * rr) {
+          bullets.splice(i, 1);
+          splitAsteroid(j);
+          break;
+        }
+      }
+    }
+
+    /* -------- Colisión nave ↔ asteroide -------- */
+    if (!gameOver) {
+      for (const a of asteroids) {
+        const rSum = a.radius * 0.82 + SHIP_R + 2;
+        if (toroidalDist2(ship.x, ship.y, a.x, a.y) < rSum * rSum) {
+          destroyShip();
+          break;
+        }
+      }
+    }
+  }
+
+  /* ==================================================================
+     11. RENDER — primitivas neón con bloom
+     ================================================================== */
+  function drawAsteroid(a, px, py) {
+    ctx.save();
+    ctx.translate(px, py);
+    ctx.rotate(a.angle);
+
+    ctx.shadowBlur  = 14;
+    ctx.shadowColor = PINK;
+    ctx.strokeStyle = PINK;
+    ctx.lineWidth   = a.size === 2 ? 2 : 2.6;
+    ctx.lineJoin    = 'round';
+
+    const v = a.verts;
+    ctx.beginPath();
+    for (let i = 0; i < v.length; i++) {
+      const x = Math.cos(v[i].a) * v[i].r;
+      const y = Math.sin(v[i].a) * v[i].r;
+      if (i === 0) ctx.moveTo(x, y);
+      else         ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    ctx.stroke();
+
+    ctx.restore();
+  }
+
+  function drawShip(px, py) {
+    ctx.save();
+    ctx.translate(px, py);
+    ctx.rotate(ship.angle);
+    ctx.lineJoin = 'round';
+    ctx.lineCap  = 'round';
+
+    ctx.shadowBlur  = 16;
+    ctx.shadowColor = CYAN;
+    ctx.strokeStyle = CYAN;
+    ctx.lineWidth   = 2.4;
+    ctx.beginPath();
+    ctx.moveTo( 18,   0);
+    ctx.lineTo(-11,  11);
+    ctx.lineTo( -6,   0);
+    ctx.lineTo(-11, -11);
+    ctx.closePath();
+    ctx.stroke();
+
+    if (ship.thrusting) {
+      const flick = 7 + Math.random() * 11;
+      ctx.shadowBlur  = 14;
+      ctx.shadowColor = YELLOW;
+      ctx.strokeStyle = YELLOW;
+      ctx.lineWidth   = 2;
+      ctx.beginPath();
+      ctx.moveTo( -7,      5);
+      ctx.lineTo( -7 - flick, 0);
+      ctx.lineTo( -7,     -5);
+      ctx.stroke();
+    }
+
+    ctx.restore();
+  }
+
+  function drawHUD() {
+    ctx.save();
+    ctx.shadowBlur  = 10;
+    ctx.shadowColor = CYAN;
+    ctx.fillStyle   = CYAN;
+    ctx.font        = '700 26px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign    = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText(String(score).padStart(5, '0'), 22, 22);
+    ctx.restore();
+  }
+
+  function render() {
+    ctx.globalAlpha = 1;
+    ctx.shadowBlur  = 0;
+
+    ctx.drawImage(starfield, 0, 0);
+
+    for (const a of asteroids) {
+      forEachWrap(a.x, a.y, a.radius + 6, (px, py) => drawAsteroid(a, px, py));
+    }
+
+    ctx.shadowBlur  = 12;
+    ctx.shadowColor = YELLOW;
+    ctx.fillStyle   = YELLOW;
+    for (const b of bullets) {
+      forEachWrap(b.x, b.y, 10, (px, py) => {
+        ctx.beginPath();
+        ctx.arc(px, py, BULLET_R, 0, Math.PI * 2);
+        ctx.fill();
+      });
+    }
+
+    ctx.shadowBlur = 0;
+    for (const p of particles) {
+      ctx.globalAlpha = Math.max(0, p.life / p.maxLife);
+      ctx.fillStyle   = p.color;
+      ctx.fillRect(p.x - 1.5, p.y - 1.5, 3, 3);
+    }
+    ctx.globalAlpha = 1;
+
+    if (!gameOver) {
+      forEachWrap(ship.x, ship.y, 36, (px, py) => drawShip(px, py));
+    }
+
+    drawHUD();
+  }
+
+  /* ==================================================================
+     12. BUCLE PRINCIPAL
+     ================================================================== */
+  function loop(ts) {
+    if (!lastTime) lastTime = ts;
+
+    let dt = (ts - lastTime) / 1000;
+    lastTime = ts;
+
+    if (dt > 0.05) dt = 0.05;
+    if (dt < 0)    dt = 0;
+
+    if (!document.hidden) {
+      update(dt);
+      render();
+    }
+
+    requestAnimationFrame(loop);
+  }
+
+  /* ==================================================================
+     13. ENTRADA — TECLADO (escritorio)
+     ------------------------------------------------------------------
+     Mapeo explícito requerido:
+        ArrowLeft  / a  → left
+        ArrowRight / d  → right
+        ArrowUp    / w  → thrust
+        Space           → fire
+     ================================================================== */
+  const KEY_MAP = {
+    ArrowLeft:  'left',
+    KeyA:       'left',
+    ArrowRight: 'right',
+    KeyD:       'right',
+    ArrowUp:    'thrust',
+    KeyW:       'thrust',
+    Space:      'fire'
+  };
+
+  window.addEventListener('keydown', (e) => {
+    const key = KEY_MAP[e.code];
+    if (!key) return;
+
+    // Evita que Space/Arrows hagan scroll o clic accidental en el botón
+    e.preventDefault();
+
+    // Ignora el auto-repeat del sistema: el estado ya es `true`
+    if (e.repeat) return;
+
+    setKeyState(key, true);
+  }, { passive: false });
+
+  window.addEventListener('keyup', (e) => {
+    const key = KEY_MAP[e.code];
+    if (!key) return;
+    e.preventDefault();
+    setKeyState(key, false);
+  }, { passive: false });
+
+  // Si la ventana pierde el foco, liberamos teclas (evita "tecla pegada")
+  window.addEventListener('blur', () => {
+    for (const k of ['left', 'right', 'thrust', 'fire']) setKeyState(k, false);
+  });
+
+  /* ==================================================================
+     14. ENTRADA — TÁCTIL (móvil)
+     ------------------------------------------------------------------
+     Se usan eventos `touchstart` / `touchend` / `touchcancel` sobre
+     los botones. `preventDefault()` evita clics fantasma, zoom por
+     doble toque y scroll accidental.
+     ================================================================== */
+  function bindTouchHold(el, key) {
+    if (!el) return;
+
+    const press = (e) => {
+      e.preventDefault();
+      setTouchState(key, true, el);
+    };
+
+    const release = (e) => {
+      if (e) e.preventDefault();
+      setTouchState(key, false, el);
+    };
+
+    el.addEventListener('touchstart',  press,   { passive: false });
+    el.addEventListener('touchend',    release, { passive: false });
+    el.addEventListener('touchcancel', release, { passive: false });
+    el.addEventListener('contextmenu', (e) => e.preventDefault());
+  }
+
+  bindTouchHold(document.getElementById('btn-left'),   'left');
+  bindTouchHold(document.getElementById('btn-right'),  'right');
+  bindTouchHold(document.getElementById('btn-thrust'), 'thrust');
+  bindTouchHold(document.getElementById('btn-fire'),   'fire');
+
+  // Red de seguridad: si el usuario arrastra el dedo fuera del botón,
+  // `touchend` no dispara sobre él. Cuando se levanta el último dedo,
+  // liberamos todos los estados táctiles.
+  document.addEventListener('touchend', (e) => {
+    if (e.touches.length === 0) {
+      for (const k of ['left', 'right', 'thrust', 'fire']) {
+        if (touchState[k]) setTouchState(k, false, null);
+      }
+      document.querySelectorAll('.ctl.active')
+        .forEach(el => el.classList.remove('active'));
+    }
+  }, { passive: true });
+
+  document.addEventListener('touchcancel', () => {
+    for (const k of ['left', 'right', 'thrust', 'fire']) {
+      if (touchState[k]) setTouchState(k, false, null);
+    }
+    document.querySelectorAll('.ctl.active')
+      .forEach(el => el.classList.remove('active'));
+  }, { passive: true });
+
+  /* ==================================================================
+     15. REINICIO Y CICLO DE VIDA
+     ================================================================== */
+  btnRestart.addEventListener('click', (e) => {
+    e.preventDefault();
+    reset();
+  });
+
+  document.addEventListener('visibilitychange', () => {
+    lastTime = 0;
+    if (document.hidden) releaseAllInputs();
+  });
+
+  /* ==================================================================
+     16. ARRANQUE
+     ================================================================== */
+  starfield = buildStarfield();
+  reset();
+  requestAnimationFrame(loop);
+
+})();
+</script>
+</body>
+</html>
